@@ -1,5 +1,5 @@
 pysrt
 gradio
-deep_translator
+deep-translator
 git+https://github.com/m-bain/whisperx.git
 git+https://github.com/openai/whisper.git
