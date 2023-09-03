@@ -3,6 +3,7 @@ import gc
 import pysrt
 import gradio as gr
 import torch
+from deep_translator import GoogleTranslator
 
 def device_change(device):
     if device.value == 'cpu':
@@ -20,8 +21,8 @@ def diarization_check(diarization, auto_sp):
     else:
         hf = gr.Textbox.update(visible=False)
         auto_sp = gr.Checkbox.update(value=True, visible=False)
-        min_sp = gr.Slider.update(visible=True)
-        max_sp = gr.Slider.update(visible=True)
+        min_sp = gr.Slider.update(visible=False)
+        max_sp = gr.Slider.update(visible=False)
     return hf, auto_sp, min_sp, max_sp
 
 def auto_sp_change(auto_sp):
@@ -34,6 +35,8 @@ def auto_sp_change(auto_sp):
     return min_sp, max_sp
 
 def generate_srt(audio_file, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp):
+    global sub_return
+
     if vram:
         compute_type = "int8"
         batch_size = 8
@@ -87,46 +90,103 @@ def generate_srt(audio_file, model, device, vram, diarization, hf_token, auto_sp
         for i in range(len(result['segments'])):
             subs.append(pysrt.SubRipItem(i+1,start=pysrt.SubRipTime(seconds=result['segments'][i]['start']), end=pysrt.SubRipTime(seconds=result['segments'][i]['end']), text=result['segments'][i]['text']))
         subs.save('output.srt')
-        return 'output.srt'
+        sub_return = ['output.srt']
+        return ['output.srt']
 
+def translate_srt(output, translate):
+    if sub_return == [] or output == None: # There is no output, neither a subtitle has been uploaded
+        pass
+    else:
+        target_lang = language_dict[translate]
+        sub2_return = []
+        for i in sub_return:
+            subs = pysrt.open(i)
+            for sub in subs:
+                sub.text = GoogleTranslator(source='auto', target=target_lang).translate(sub.text)
+            file_name = i.split('.')[0] + f'-{target_lang}.srt'
+            subs.save(file_name, encoding='utf-8')
+            sub2_return.append(file_name)
+        return sub2_return
 
+##############################################################
+
+language_dict = {
+    "English": "en",
+    "Bahasa (Indonesian)": "id",
+    "Català (Catalan)": "ca",
+    "Čeština (Czech)": "cs",
+    "Dansk (Danish)": "da",
+    "Deutsch (German)": "de",
+    "Eesti (Estonian)": "et",
+    "Español (Spanish)": "es",
+    "Français (French)": "fr",
+    "Italiano (Italian)": "it",
+    "Latviešu (Latvian)": "lv",
+    "Lietuvių (Lithuanian)": "lt",
+    "Magyar (Hungarian)": "hu",
+    "Nederlands (Dutch)": "nl",
+    "Norsk (Norwegian)": "no",
+    "Polski (Polish)": "pl",
+    "Português (Portuguese)": "pt",
+    "Română (Romanian)": "ro",
+    "Slovenčina (Slovak)": "sk",
+    "Suomi (Finnish)": "fi",
+    "العربية (Arabic)": "ar",
+    "Ελληνικά (Greek)": "el",
+    "עברית (Hebrew)": "iw",
+    "हिन्दी (Hindi)": "hi",
+    "日本語 (Japanese)": "ja",
+    "한국어 (Korean)": "ko",
+    "Русский (Russian)": "ru",
+    "中文 (简体) [Chinese Simplified]": "zh-CN",
+    "中文 (繁體) [Chinese Traditional]": "zh-TW"
+}
 
 if torch.cuda.is_available():
     device_choices = ['cuda', 'cpu']
 else:
     device_choices = ['cpu']
+sub_return = []
 
 with gr.Blocks(title='ibarcena.net') as app:
     html = '''
         <a href='https://ibarcena.net/me'>
-          <img src='https://ibarcena.net/content/images/2023/08/io2b-1.png alt='ibarcena.net/me'>
+            <img src='https://ibarcena.net/content/images/2023/08/io2b-1.png alt='ibarcena.net/me'>
         </a>
     '''
     gr.HTML(html)
-
-    audio = gr.Audio(source="upload", type='filepath', label="Audio File")
-    model = gr.Dropdown(choices=['tiny', 'base', 'small', 'medium', 'large-v2'], value="small", label="Model Size")
-    device = gr.Dropdown(choices=device_choices, value=device_choices[0], label="Device")
-
-    if device.value == 'cpu':
-        vram = gr.Checkbox(value=False, label="Low memory mode", visible=False)
-        diarization = gr.Checkbox(default=False, label="Diarization", visible=False)
-    else:
-        vram = gr.Checkbox(value=False, label="Low memory mode", visible=True)
-        diarization = gr.Checkbox(default=False, label="Diarization", visible=True)
-
-    hf_token = gr.Textbox(label='Hugging Face Token', visible=False)
+    
     with gr.Row():
-        auto_sp = gr.Checkbox(label="Auto Number of speakers", value=True, visible=False)
-        min_sp = gr.Slider(label="Min", value=1, minimum=1, maximum=10, step=1, visible=False)
-        max_sp = gr.Slider(label="Max", value=1, minimum=1, maximum=10, step=1, visible=False)
+        with gr. Column():
+            audio = gr.Audio(source="upload", type='filepath', label="Audio File")
+            model = gr.Dropdown(choices=['tiny', 'base', 'small', 'medium', 'large-v2'], value="small", label="Model Size")
+            device = gr.Dropdown(choices=device_choices, value=device_choices[0], label="Device")
 
-    run = gr.Button('Run')
-    output = gr.File(label="SRT File")
+            if device.value == 'cpu':
+                vram = gr.Checkbox(value=False, label="Low memory mode", visible=False)
+                diarization = gr.Checkbox(default=False, label="Diarization", visible=False)
+            else:
+                vram = gr.Checkbox(value=False, label="Low memory mode", visible=True)
+                diarization = gr.Checkbox(default=False, label="Diarization", visible=True)
+
+            hf_token = gr.Textbox(label='Hugging Face Token', visible=False)
+            with gr.Row():
+                auto_sp = gr.Checkbox(label="Auto Number of speakers", value=True, visible=False)
+                min_sp = gr.Slider(label="Min", value=1, minimum=1, maximum=10, step=1, visible=False)
+                max_sp = gr.Slider(label="Max", value=1, minimum=1, maximum=10, step=1, visible=False)
+
+            run = gr.Button('Run')
+
+        with gr.Column():
+            output = gr.File(type='bytes', label="SRT File")
+            translate = gr.Dropdown(list(language_dict.keys()), label="Translate to", value="English")
+            translate_btn = gr.Button("Translate")
+            output2 = gr.File(label="SRT File")
 
     device.change(fn=device_change, inputs=[device], outputs=[vram])
     diarization.change(fn=diarization_check, inputs=[diarization, auto_sp], outputs=[hf_token, auto_sp, min_sp, max_sp])
     auto_sp.change(fn=auto_sp_change, inputs=[auto_sp], outputs=[min_sp, max_sp])
     run.click(fn=generate_srt, inputs=[audio, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp], outputs=[output])
+    translate_btn.click(fn=translate_srt, inputs=[output, translate], outputs=[output2])
 
-    app.launch()
+    app.launch(debug=True)
