@@ -28,7 +28,7 @@ pip install -r requirements.txt
 ```
 
 ### 3. Run the webapp
-Only for windows: Go to Settings > Privacy & Security > For Developers and turn Developer Mode to on.
+Only for windows, you must create Symbolic Links: Go to Settings > Privacy & Security > For Developers and turn Developer Mode to on.
 ```
 python app.py
 ```
