@@ -1,16 +1,20 @@
 import whisperx
 import gc
+import os
 import pysrt
 import gradio as gr
 import torch
 from deep_translator import GoogleTranslator
+from pytube import YouTube
 
 def device_change(device):
-    if device.value == 'cpu':
-        vram = gr.Checkbox.update(visible=False)
+    if device == 'cpu':
+        vram = gr.Checkbox.update(value=False, visible=False)
+        diarization = gr.Checkbox.update(value=False, visible=False)
     else:
-        vram = gr.Checkbox.update(visible=True)
-    return vram
+        vram = gr.Checkbox.update(value=False, visible=True)
+        diarization = gr.Checkbox.update(value=False, visible=True)
+    return vram, diarization
 
 def diarization_check(diarization, auto_sp):
     if diarization:
@@ -34,12 +38,17 @@ def auto_sp_change(auto_sp):
         max_sp = gr.Slider.update(visible=True)
     return min_sp, max_sp
 
-def generate_srt(audio_file, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp):
+def generate_srt(yt, audio_file, model_size, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp):
+    # First make sure we have an audio file
+    if yt != None or yt!= "":
+        YouTube(yt).streams.filter(type='audio', subtype='mp4')[-1].download(filename='audio.mp4')
+        audio_file = 'audio.mp4'
+
     global sub_return
 
     if vram:
-        compute_type = "int8"
         batch_size = 8
+        compute_type = "int8"
     else:
         batch_size = 16
         compute_type = "float16"
@@ -50,7 +59,7 @@ def generate_srt(audio_file, model, device, vram, diarization, hf_token, auto_sp
         compute_type = "float16"
 
     # 1. Transcribe with original whisper (batched)
-    model = whisperx.load_model(model, device, compute_type=compute_type)
+    model = whisperx.load_model(model_size, device, compute_type=compute_type)
     audio = whisperx.load_audio(audio_file)
     result = model.transcribe(audio, batch_size=batch_size)
     gc.collect(); torch.cuda.empty_cache(); del model
@@ -89,6 +98,8 @@ def generate_srt(audio_file, model, device, vram, diarization, hf_token, auto_sp
         subs = pysrt.SubRipFile()
         for i in range(len(result['segments'])):
             subs.append(pysrt.SubRipItem(i+1,start=pysrt.SubRipTime(seconds=result['segments'][i]['start']), end=pysrt.SubRipTime(seconds=result['segments'][i]['end']), text=result['segments'][i]['text']))
+        if os.path.exists('output.srt'):
+            os.remove('output.srt')
         subs.save('output.srt')
         sub_return = ['output.srt']
         return ['output.srt']
@@ -159,6 +170,7 @@ with gr.Blocks(title='ibarcena.net') as app:
     with gr.Row():
         with gr. Column():
             audio = gr.Audio(source="upload", type='filepath', label="Audio File")
+            yt = gr.Textbox(label="Youtube link, leave empty to use an audio file")
             model = gr.Dropdown(choices=['tiny', 'base', 'small', 'medium', 'large-v2'], value="small", label="Model Size")
             device = gr.Dropdown(choices=device_choices, value=device_choices[0], label="Device")
 
@@ -183,10 +195,10 @@ with gr.Blocks(title='ibarcena.net') as app:
             translate_btn = gr.Button("Translate")
             output2 = gr.File(label="SRT File")
 
-    device.change(fn=device_change, inputs=[device], outputs=[vram])
+    device.change(fn=device_change, inputs=[device], outputs=[vram, diarization])
     diarization.change(fn=diarization_check, inputs=[diarization, auto_sp], outputs=[hf_token, auto_sp, min_sp, max_sp])
     auto_sp.change(fn=auto_sp_change, inputs=[auto_sp], outputs=[min_sp, max_sp])
-    run.click(fn=generate_srt, inputs=[audio, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp], outputs=[output])
+    run.click(fn=generate_srt, inputs=[yt, audio, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp], outputs=[output])
     translate_btn.click(fn=translate_srt, inputs=[output, translate], outputs=[output2])
 
-    app.launch(debug=True)
+    app.launch(share=False, debug=True)
