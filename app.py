@@ -55,7 +55,7 @@ def auto_sp_change(auto_sp):
         max_sp = gr.Slider.update(visible=True)
     return min_sp, max_sp
 
-def generate_srt(source, yt, audio_file, directory, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp):
+def generate_srt(source, yt, audio_file, directory, language_code, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp):
     global sub_return
 
     if vram:
@@ -87,7 +87,15 @@ def generate_srt(source, yt, audio_file, directory, model, device, vram, diariza
     for audio_file in audio_files:
         try:
             # 1. Transcribe with original whisper (batched)
-            whisper_model = whisperx.load_model(model, device, compute_type=compute_type)
+            if language_code == "Auto":
+                whisper_model = whisperx.load_model(model, device, compute_type=compute_type)
+            elif language_code == "english":
+                if model in ['tiny', 'base', 'small', 'medium']:
+                    whisper_model = whisperx.load_model(model+'.en', device, compute_type=compute_type, language=GoogleTranslator().get_supported_languages(as_dict=True)[language_code])
+                else:
+                    whisper_model = whisperx.load_model(model, device, compute_type=compute_type, language=GoogleTranslator().get_supported_languages(as_dict=True)[language_code])
+            else:
+                whisper_model = whisperx.load_model(model, device, compute_type=compute_type, language=GoogleTranslator().get_supported_languages(as_dict=True)[language_code])
             audio = whisperx.load_audio(audio_file)
             result = whisper_model.transcribe(audio, batch_size=batch_size)
             gc.collect(); torch.cuda.empty_cache(); del whisper_model
@@ -127,9 +135,9 @@ def generate_srt(source, yt, audio_file, directory, model, device, vram, diariza
                 subs.save(f"{audio_file.split('.')[0]}.srt")
                 sub_return.append(f"{audio_file.split('.')[0]}.srt")
         except:
-            print(f"{audio_file} => is not a valid media file")
-    gr.Info(f'Total time: {int(time.time() - start_time)} s')
-    return sub_return
+            print(f"\n{audio_file} => is not a valid media file\n")
+
+    return gr.File.update(sub_return, label=f'Total time: {int(time.time() - start_time)} s')
 
 def translate_srt(output, translate):
     if sub_return == [] or output == None: # There is no output, neither a subtitle has been uploaded
@@ -146,8 +154,7 @@ def translate_srt(output, translate):
             subs.save(file_name, encoding='utf-8')
             sub2_return.append(file_name)
 
-        gr.Info(f'Total time: {int(time.time() - start_time)} s')
-        return sub2_return
+        return gr.File.update(sub2_return, label=f'Total time: {int(time.time() - start_time)} s') 
 
 ##############################################################
 
@@ -204,6 +211,7 @@ with gr.Blocks(title='ibarcena.net') as app:
             directory = gr.Textbox(label="Directory", visible=False)
             audio = gr.Audio(source="upload", type='filepath', label="Audio File")
 
+            language_code = gr.Dropdown(choices = ["Auto"] + list(GoogleTranslator().get_supported_languages(as_dict=True).keys()), label="Language", value="Auto")
             model = gr.Dropdown(choices=['tiny', 'base', 'small', 'medium', 'large-v2'], value="small", label="Model Size")
             device = gr.Dropdown(choices=device_choices, value=device_choices[0], label="Device")
 
@@ -232,7 +240,7 @@ with gr.Blocks(title='ibarcena.net') as app:
     device.change(fn=device_change, inputs=[device], outputs=[vram, diarization])
     diarization.change(fn=diarization_check, inputs=[diarization, auto_sp], outputs=[hf_token, auto_sp, min_sp, max_sp])
     auto_sp.change(fn=auto_sp_change, inputs=[auto_sp], outputs=[min_sp, max_sp])
-    run.click(fn=generate_srt, inputs=[source, yt, audio, directory, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp], outputs=[output])
+    run.click(fn=generate_srt, inputs=[source, yt, audio, directory, language_code, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp], outputs=[output])
     translate_btn.click(fn=translate_srt, inputs=[output, translate], outputs=[output2])
 
     app.launch(share=False, debug=True)
