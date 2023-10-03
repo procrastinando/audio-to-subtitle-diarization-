@@ -6,6 +6,7 @@ import torch
 from deep_translator import GoogleTranslator
 from pytube import YouTube
 import os
+import time
 
 def source_change(source):
     if source == 'Youtube':
@@ -81,6 +82,7 @@ def generate_srt(source, yt, audio_file, directory, model, device, vram, diariza
         audio_files = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
         print(audio_files)
 
+    start_time = time.time()
     sub_return = []
     for audio_file in audio_files:
         try:
@@ -126,12 +128,14 @@ def generate_srt(source, yt, audio_file, directory, model, device, vram, diariza
                 sub_return.append(f"{audio_file.split('.')[0]}.srt")
         except:
             print(f"{audio_file} => is not a valid media file")
+    gr.Info(f'Total time: {int(time.time() - start_time)} s')
     return sub_return
 
 def translate_srt(output, translate):
     if sub_return == [] or output == None: # There is no output, neither a subtitle has been uploaded
         pass
     else:
+        start_time = time.time()
         target_lang = language_dict[translate]
         sub2_return = []
         for i in sub_return:
@@ -141,6 +145,8 @@ def translate_srt(output, translate):
             file_name = i.split('.')[0] + f'-{target_lang}.srt'
             subs.save(file_name, encoding='utf-8')
             sub2_return.append(file_name)
+
+        gr.Info(f'Total time: {int(time.time() - start_time)} s')
         return sub2_return
 
 ##############################################################
