@@ -148,16 +148,13 @@ def translate_srt(output, translate):
         sub2_return = []
         name = 0
         for i in output:
-            output_str = i.decode('utf-8')
-            with open('tmp.srt', 'w') as f:
-                f.write(output_str)
-            subs = pysrt.open('tmp.srt')
+            subs = pysrt.open(i.name)
             for sub in subs:
                 sub.text = GoogleTranslator(source='auto', target=target_lang).translate(sub.text)
-            file_name = 'subtitle' + str(name + 1) + f'-{target_lang}.srt'
+            file_name = os.path.basename(i.name)
+            file_name = os.path.splitext(file_name)[0] + f'-{target_lang}.srt'
             subs.save(file_name, encoding='utf-8')
             sub2_return.append(file_name)
-            os.remove('tmp.srt')
 
         return gr.File.update(sub2_return, label=f'Total time: {int(time.time() - start_time)} s') 
 
@@ -236,7 +233,7 @@ with gr.Blocks(title='ibarcena.net') as app:
             run = gr.Button('Run')
 
         with gr.Column():
-            output = gr.File(type='bytes', label="SRT File", file_count='multiple')
+            output = gr.File(label="SRT File", file_count='multiple')
             translate = gr.Dropdown(list(language_dict.keys()), label="Translate to", value="English")
             translate_btn = gr.Button("Translate")
             output2 = gr.File(label="SRT File", file_count='multiple')
