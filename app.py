@@ -12,17 +12,25 @@ def source_change(source):
     if source == 'Youtube':
         yt = gr.Textbox.update(visible=True)
         audio = gr.Audio.update(visible=False)
+        video = gr.Video.update(visible=False)
         directory = gr.Textbox.update(visible=False)
     elif source == 'Audio File':
         yt = gr.Textbox.update(visible=False)
         audio = gr.Audio.update(visible=True)
+        video = gr.Video.update(visible=False)
+        directory = gr.Textbox.update(visible=False)
+    elif source == 'Video File':
+        yt = gr.Textbox.update(visible=False)
+        audio = gr.Audio.update(visible=False)
+        video = gr.Video.update(visible=True)
         directory = gr.Textbox.update(visible=False)
     elif source == 'Directory':
         yt = gr.Textbox.update(visible=False)
         audio = gr.Audio.update(visible=False)
+        video = gr.Video.update(visible=False)
         directory = gr.Textbox.update(visible=True)
 
-    return yt, audio, directory
+    return yt, audio, video, directory
 
 def device_change(device):
     if device == 'cpu':
@@ -55,7 +63,7 @@ def auto_sp_change(auto_sp):
         max_sp = gr.Slider.update(visible=True)
     return min_sp, max_sp
 
-def generate_srt(source, yt, audio_file, directory, language_code, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp):
+def generate_srt(source, yt, audio_file, video_file, directory, language_code, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp):
     global sub_return
 
     if vram:
@@ -77,6 +85,9 @@ def generate_srt(source, yt, audio_file, directory, language_code, model, device
         print(audio_files)
     elif source == 'Audio File':
         audio_files = [audio_file]
+        print(audio_files)
+    elif source == 'Video File':
+        audio_files = [video_file]
         print(audio_files)
     elif source == 'Directory':
         audio_files = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
@@ -208,10 +219,11 @@ with gr.Blocks(title='ibarcena.net') as app:
 
     with gr.Row():
         with gr. Column():
-            source = gr.Radio(choices=['Youtube', 'Audio File', 'Directory'], label="Source", value='Audio File')
+            source = gr.Radio(choices=['Youtube', 'Audio File', 'Video File', 'Directory'], label="Source", value='Audio File')
             yt = gr.Textbox(label="Youtube link", visible=False)
             directory = gr.Textbox(label="Directory", visible=False)
             audio = gr.Audio(source="upload", type='filepath', label="Audio File")
+            video = gr.Video(source="upload", label="Video File")
 
             language_code = gr.Dropdown(choices = ["Auto"] + list(GoogleTranslator().get_supported_languages(as_dict=True).keys()), label="Language", value="Auto")
             model = gr.Dropdown(choices=['tiny', 'base', 'small', 'medium', 'large-v2'], value="small", label="Model Size")
@@ -238,11 +250,11 @@ with gr.Blocks(title='ibarcena.net') as app:
             translate_btn = gr.Button("Translate")
             output2 = gr.File(label="SRT File", file_count='multiple')
 
-    source.change(fn=source_change, inputs=[source], outputs=[yt, audio, directory])
+    source.change(fn=source_change, inputs=[source], outputs=[yt, audio, video, directory])
     device.change(fn=device_change, inputs=[device], outputs=[vram, diarization])
     diarization.change(fn=diarization_check, inputs=[diarization, auto_sp], outputs=[hf_token, auto_sp, min_sp, max_sp])
     auto_sp.change(fn=auto_sp_change, inputs=[auto_sp], outputs=[min_sp, max_sp])
-    run.click(fn=generate_srt, inputs=[source, yt, audio, directory, language_code, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp], outputs=[output])
+    run.click(fn=generate_srt, inputs=[source, yt, audio, video, directory, language_code, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp], outputs=[output])
     translate_btn.click(fn=translate_srt, inputs=[output, translate], outputs=[output2])
 
     app.launch(share=False, debug=True)
