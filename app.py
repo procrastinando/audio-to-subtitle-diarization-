@@ -150,18 +150,17 @@ def generate_srt(source, yt, audio_file, video_file, directory, language_code, m
 
     return gr.File.update(sub_return, label=f'Total time: {int(time.time() - start_time)} s')
 
-def translate_srt(output, translate):
+def translate_srt(output, translate, progress=gr.Progress()):
     if output == None:
         pass
     else:
         start_time = time.time()
         target_lang = language_dict[translate]
         sub2_return = []
-        name = 0
         for i in output:
             subs = pysrt.open(i.name)
-            for sub in subs:
-                sub.text = GoogleTranslator(source='auto', target=target_lang).translate(sub.text)
+            for j in progress.tqdm(range(len(subs)), desc=os.path.basename(i.name)):
+                subs[j].text = GoogleTranslator(source='auto', target=target_lang).translate(subs[j].text)
             file_name = os.path.basename(i.name)
             file_name = os.path.splitext(file_name)[0] + f'-{target_lang}.srt'
             subs.save(file_name, encoding='utf-8')
@@ -257,4 +256,4 @@ with gr.Blocks(title='ibarcena.net') as app:
     run.click(fn=generate_srt, inputs=[source, yt, audio, video, directory, language_code, model, device, vram, diarization, hf_token, auto_sp, min_sp, max_sp], outputs=[output])
     translate_btn.click(fn=translate_srt, inputs=[output, translate], outputs=[output2])
 
-    app.launch(share=False, debug=True)
+    app.queue().launch(share=False, debug=True)
